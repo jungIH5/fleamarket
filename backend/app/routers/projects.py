@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..database import get_session
-from ..models import Project, FurnitureType
+from ..models import Project, FurnitureType, Drawing, PlacementArea, PlacementRule, PlacementItem
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -46,6 +46,12 @@ def delete_project(project_id: int, session: Session = Depends(get_session)):
     project = session.get(Project, project_id)
     if not project:
         raise HTTPException(404, "프로젝트를 찾을 수 없습니다")
+
+    # 외래키로 이 프로젝트를 참조하는 하위 데이터를 먼저 지워야 한다 (자식 -> 부모 순서).
+    for model in (PlacementItem, PlacementRule, PlacementArea, Drawing, FurnitureType):
+        for row in session.exec(select(model).where(model.project_id == project_id)).all():
+            session.delete(row)
+
     session.delete(project)
     session.commit()
     return {"ok": True}

@@ -32,7 +32,8 @@ def parse_raster(image_path: str, min_area_px: float = 5000) -> dict:
     segments = []
     lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=80, minLineLength=40, maxLineGap=10)
     if lines is not None:
-        for x1, y1, x2, y2 in lines[:, 0]:
+        # OpenCV 3/4는 (N,1,4), OpenCV 5는 (N,4)를 반환해 버전에 따라 모양이 다르므로 통일한다.
+        for x1, y1, x2, y2 in lines.reshape(-1, 4):
             segments.append([[float(x1), float(y1)], [float(x2), float(y2)]])
 
     # 닫힌 영역(방/구역) 후보 = 윤곽선 중 면적이 큰 것들
