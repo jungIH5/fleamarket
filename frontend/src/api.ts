@@ -9,7 +9,10 @@ import type {
   PlacementItem,
 } from "./types";
 
-const API_BASE = "http://localhost:8000";
+// exe로 패키징된 빌드는 프론트/백엔드가 같은 프로세스·같은 포트에서 서빙되므로 상대경로("")를 쓴다
+// (frontend/.env.production에서 VITE_API_BASE=""로 지정). Docker+Vite dev 환경에서는 백엔드가
+// 별도 포트(8000)에 떠 있으므로 기본값으로 절대주소를 쓴다.
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 const client = axios.create({ baseURL: API_BASE });
 
 export const api = {

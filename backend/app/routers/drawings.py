@@ -11,10 +11,11 @@ from ..database import get_session
 from ..models import Drawing
 from ..parsers.dxf_parser import parse_dxf
 from ..parsers.raster_parser import parse_raster, pdf_to_image
+from ..paths import get_app_dir
 
 router = APIRouter(prefix="/projects/{project_id}/drawings", tags=["drawings"])
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "uploads")
+UPLOAD_DIR = os.path.join(get_app_dir(), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 EXT_TO_TYPE = {

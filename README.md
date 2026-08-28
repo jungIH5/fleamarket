@@ -26,7 +26,9 @@
 - 특정 자리 하나만 수동으로 추가하거나, 기구 종류를 바꾸거나(예: 테이블 → 행거), 자유 메모(전기 사용량 등)를 남길 수 있음
 - 사람이 손댄 자리는 자동배치를 재실행해도 지워지지 않고, 오히려 새 자동배치가 그 자리를 피해감
 - PNG로 내보내기
-- 프로젝트/도면/배치 결과는 서버(PostgreSQL)에 저장되어 여러 기기에서 이어서 작업 가능
+- 실무자 노트북 한 대에서 실행파일(exe) 하나로 뜨는 로컬 도구. 프로젝트/도면/배치 결과는 그 노트북의 SQLite
+  파일에 저장되고, 완성된 배치는 이미지로 내보내 카카오톡 등으로 현장 설치 인력에게 전달하는 식으로 씀
+  (아이패드 등에서 직접 편집할 필요가 있다면 Docker+PostgreSQL 구성으로 여러 기기 접속도 가능)
 
 ## 기술 스택과 선택 이유
 
@@ -36,7 +38,7 @@
 |---|---|
 | **FastAPI** | Pydantic 기반이라 SQLModel과 자연스럽게 맞물리고, 타입 힌트만으로 요청/응답 검증과 API 문서(`/docs`)가 자동 생성돼 개발 속도가 빠름 |
 | **SQLModel** | SQLAlchemy(ORM) + Pydantic(검증)을 한 클래스로 합쳐, DB 테이블 모델을 API 스키마로도 재사용 가능 |
-| **PostgreSQL** | 여러 기기·사용자가 같은 프로젝트를 이어서 작업해야 해서 SQLite보다 동시접속에 적합한 걸 선택 |
+| **SQLite** | 실무자 한 명이 노트북에서 단독으로 쓰는 도구라 별도 DB 서버 없이 파일 하나로 끝나는 SQLite가 배포에 가장 간단함 (다기기 동시 접속이 필요해지면 PostgreSQL로 바꿀 수 있게 DB 접속 문자열만 환경변수로 분리해둠) |
 | **ezdxf** | 순수 파이썬 DXF 읽기/쓰기 라이브러리. LWPOLYLINE/POLYLINE/ARC 등 엔티티를 세밀하게 다룰 수 있고 유지보수가 활발함 |
 | **OpenCV (headless)** | PDF/이미지에서 윤곽선·직선 검출로 벽/영역을 추정하는 사실상 표준 라이브러리. headless 버전이라 서버에 불필요한 GUI 의존성이 없음 |
 | **pdf2image + poppler** | PDF를 래스터 이미지로 바꾸는 표준 조합. poppler는 로컬 설치가 까다로워 Docker 이미지 안에 넣어 해결 |
@@ -51,13 +53,31 @@
 | **Konva / react-konva** | 캔버스 기반 2D 라이브러리로 다각형 꼭짓점 드래그, 기구 드래그·회전 같은 인터랙션을 SVG 직접 조작보다 훨씬 적은 코드로 구현 |
 | **axios** | JSON API 클라이언트 코드를 간결하게 유지 |
 
-### 인프라
+### 배포
 
 | 기술 | 선택 이유 |
 |---|---|
-| **Docker / docker-compose** | opencv/poppler/psycopg2처럼 OS 의존적인 네이티브 라이브러리를 로컬에 개별 설치하지 않고 컨테이너로 통일된 개발 환경 제공 |
+| **PyInstaller (단일 exe)** | 실무자가 Docker/Node/Python을 설치할 필요 없이 exe 파일 하나만 받아서 더블클릭하면 되도록 함. FastAPI가 빌드된 React 정적 파일까지 같은 포트에서 서빙해서 프로세스도 하나뿐 |
+| **Docker / docker-compose (개발용)** | 실제 개발할 때는 opencv/poppler처럼 OS 의존적인 네이티브 라이브러리를 로컬에 개별 설치하지 않고 컨테이너로 통일된 환경에서 작업 |
 
 ## 실행 방법
+
+### 실무자용 (exe 하나로 실행)
+
+1. `backend\dist\FleaMarketLayout.exe`를 노트북에 복사
+2. 더블클릭하면 로컬 서버가 뜨고 기본 브라우저가 자동으로 열림 (`http://127.0.0.1:8000`)
+3. 프로젝트/도면/업로드 파일은 exe와 같은 폴더에 저장되므로, exe 파일을 옮기려면 옆에 생기는
+   `layout.db`, `uploads` 폴더도 같이 옮겨야 함
+
+exe를 새로 빌드하려면 (최초 1회 준비 후):
+```powershell
+cd frontend; npm install
+cd ../backend; python -m venv .venv; .venv\Scripts\pip install -r requirements.txt pyinstaller
+.\build_exe.ps1
+```
+결과물: `backend\dist\FleaMarketLayout.exe`
+
+### 개발용 (Docker)
 
 ```bash
 docker compose up -d
@@ -65,6 +85,7 @@ docker compose up -d
 
 - 백엔드: http://localhost:8000 (API 문서: `/docs`)
 - 프론트엔드: http://localhost:5173
+- 이 구성은 PostgreSQL을 쓰므로 여러 기기(아이패드 등)에서 동시 접속해 편집하는 경우에 적합
 
 ## 알려진 제약사항
 
@@ -74,3 +95,7 @@ docker compose up -d
 - PDF/이미지는 실제 축척 정보가 없어, 업로드 후 도면 단위당 실제 mm 값을 직접 입력해야 합니다.
 - 자동배치 알고리즘은 격자 기반 greedy 방식으로, 완전 최적해를 구하는 빈패킹이 아닙니다. 0°/90° 축 정렬 배치만
   시도하기 때문에 삼각형·L자형처럼 각지고 좁은 영역에서는 실제 채울 수 있는 것보다 적게 배치될 수 있습니다.
+- exe는 opencv/numpy/shapely를 다 묶다 보니 용량이 약 90MB이고, 처음 실행할 때 Windows Defender가 새 실행
+  파일을 검사하느라 몇 초 더 걸릴 수 있습니다.
+- PDF 업로드는 poppler가 필요한데, exe에는 poppler 바이너리를 같이 묶지 않았습니다. exe로 쓸 때는 PDF 대신
+  이미지(PNG/JPG)로 변환해서 올리는 걸 권장합니다 (DXF/DWG/이미지는 exe에서 바로 동작 확인함).
